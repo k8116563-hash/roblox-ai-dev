@@ -12,7 +12,6 @@ const PORT = process.env.PORT || 3000;
 const UNIVERSE_ID = '10201536579';
 const PLACE_ID    = '109348910187641';
 
-// ── Hard-coded fallbacks so Railway works even without .env being loaded ─────
 const CONFIG = {
   NEON_DATABASE_URL: process.env.NEON_DATABASE_URL || 'postgresql://neondb_owner:npg_cGA6nyC2QtYk@ep-autumn-meadow-atzzef3o-pooler.c-9.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require',
   NVIDIA_API_KEY:    process.env.NVIDIA_API_KEY    || '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',
@@ -20,79 +19,65 @@ const CONFIG = {
   APP_SECRET:        process.env.APP_SECRET        || '33805136135d8236f846b7c9a05575bcae33dea6adabaaa85686115bc9636de6',
 };
 
-// ── Database ─────────────────────────────────────────────────────────────────
-const pool = new Pool({
-  connectionString: CONFIG.NEON_DATABASE_URL,
-  ssl: { rejectUnauthorized: false },
-});
+// ── Database ──────────────────────────────────────────────────────────────────
+const pool = new Pool({ connectionString: CONFIG.NEON_DATABASE_URL, ssl: { rejectUnauthorized: false } });
 
 async function initDB() {
   await pool.query(`
-    CREATE TABLE IF NOT EXISTS game_code (
-      id   INTEGER PRIMARY KEY,
-      code TEXT    NOT NULL DEFAULT ''
-    );
+    CREATE TABLE IF NOT EXISTS game_code (id INTEGER PRIMARY KEY, code TEXT NOT NULL DEFAULT '');
     INSERT INTO game_code (id, code) VALUES (1, '') ON CONFLICT (id) DO NOTHING;
   `);
   console.log('Database ready.');
 }
 
 // ── NVIDIA AI ─────────────────────────────────────────────────────────────────
-const ai = new OpenAI({
-  apiKey: CONFIG.NVIDIA_API_KEY,
-  baseURL: 'https://integrate.api.nvidia.com/v1',
-});
+const ai = new OpenAI({ apiKey: CONFIG.NVIDIA_API_KEY, baseURL: 'https://integrate.api.nvidia.com/v1' });
 
-const CODE_SYSTEM_PROMPT =
-  'You are an expert Roblox Luau developer. The user will give you a prompt and existing code. ' +
-  'Modify or add to the code to fulfill the prompt. ' +
-  'Return ONLY raw, valid Luau code. Do not include markdown formatting, backticks, or explanations.';
-
-const DISCUSS_SYSTEM_PROMPT =
-  'You are an expert Roblox game developer and creative director. ' +
-  'The user wants to build something in Roblox. Before any code is written, your job is to: ' +
-  '1) Briefly confirm you understand their idea. ' +
-  '2) Ask any important clarifying questions if the prompt is vague (max 2-3 short questions). ' +
-  '3) If you have a genuinely better or cooler idea that improves on their prompt, suggest it briefly. ' +
-  '4) If the prompt is clear and good, just say so and confirm you\'re ready. ' +
-  'Be concise, friendly, and conversational. No code yet — just discuss.';
-
-// ── Roblox .rbxlx builder ─────────────────────────────────────────────────────
+// ── Roblox publish helper ─────────────────────────────────────────────────────
 function buildRbxlx(luauCode) {
-  const safeCode = luauCode.replace(/\]\]>/g, ']]]]><![CDATA[>');
+  const safe = luauCode.replace(/\]\]>/g, ']]]]><![CDATA[>');
   return `<?xml version="1.0" encoding="utf-8"?>
-<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime"
-        xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-        xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd"
-        version="4">
-  <External>null</External>
-  <External>nil</External>
-  <Item class="DataModel" referent="RBX0000000">
+<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+  <External>null</External><External>nil</External>
+  <Item class="DataModel" referent="RBX0">
     <Properties><string name="Name">Place</string></Properties>
-    <Item class="Workspace" referent="RBX0000001">
-      <Properties>
-        <bool name="FilteringEnabled">true</bool>
-        <string name="Name">Workspace</string>
-      </Properties>
+    <Item class="Workspace" referent="RBX1">
+      <Properties><bool name="FilteringEnabled">true</bool><string name="Name">Workspace</string></Properties>
     </Item>
-    <Item class="ServerScriptService" referent="RBX0000002">
+    <Item class="ServerScriptService" referent="RBX2">
       <Properties><string name="Name">ServerScriptService</string></Properties>
-      <Item class="Script" referent="RBX0000003">
+      <Item class="Script" referent="RBX3">
         <Properties>
-          <string name="Name">AIGeneratedScript</string>
-          <ProtectedString name="Source"><![CDATA[${safeCode}]]></ProtectedString>
+          <string name="Name">AIScript</string>
+          <ProtectedString name="Source"><![CDATA[${safe}]]></ProtectedString>
           <bool name="Disabled">false</bool>
         </Properties>
       </Item>
     </Item>
-    <Item class="Lighting" referent="RBX0000004">
-      <Properties><string name="Name">Lighting</string></Properties>
-    </Item>
-    <Item class="ReplicatedStorage" referent="RBX0000005">
-      <Properties><string name="Name">ReplicatedStorage</string></Properties>
-    </Item>
+    <Item class="Lighting" referent="RBX4"><Properties><string name="Name">Lighting</string></Properties></Item>
   </Item>
 </roblox>`;
+}
+
+async function publishToRoblox(luauCode) {
+  const xml = buildRbxlx(luauCode);
+  const buf = Buffer.from(xml, 'utf-8');
+  const url = `https://apis.roblox.com/universes/v1/${UNIVERSE_ID}/places/${PLACE_ID}/versions?versionType=Published`;
+
+  // Try octet-stream first, then xml as fallback
+  for (const ct of ['application/octet-stream', 'application/xml']) {
+    const r = await axios.post(url, buf, {
+      headers: { 'x-api-key': CONFIG.ROBLOX_API_KEY, 'Content-Type': ct },
+      validateStatus: () => true,
+    });
+    console.log(`[Roblox] ${ct} → ${r.status}`, JSON.stringify(r.data));
+    if (r.status >= 200 && r.status < 300) return { ok: true };
+    if (r.status !== 415) {
+      // Not an unsupported media type — return this error, no point trying next
+      return { ok: false, status: r.status, body: r.data };
+    }
+  }
+  return { ok: false, status: 415, body: 'Both content types rejected' };
 }
 
 // ── Middleware ────────────────────────────────────────────────────────────────
@@ -100,193 +85,148 @@ app.use(express.json());
 app.use(express.static(path.join(__dirname, 'public')));
 
 function requireAuth(req, res, next) {
-  const token = req.headers['x-app-token'];
-  if (!token || token !== CONFIG.APP_SECRET) {
-    return res.status(401).json({ error: 'Unauthorized.' });
-  }
+  if (req.headers['x-app-token'] !== CONFIG.APP_SECRET) return res.status(401).json({ error: 'Unauthorized.' });
   next();
 }
 
-// ── Routes ────────────────────────────────────────────────────────────────────
+// ── Debug page — NO auth, visit in browser ───────────────────────────────────
+app.get('/debug', async (req, res) => {
+  const results = {};
 
-app.get('/api/token', (req, res) => {
-  res.json({ token: CONFIG.APP_SECRET });
+  // Test NVIDIA
+  try {
+    const c = await ai.chat.completions.create({
+      model: 'nvidia/llama-3.1-nemotron-ultra-253b-v1',
+      messages: [{ role: 'user', content: 'Say "NVIDIA OK" and nothing else.' }],
+      max_tokens: 20,
+    });
+    results.nvidia = { ok: true, reply: c.choices[0].message.content };
+  } catch (e) { results.nvidia = { ok: false, error: e.message }; }
+
+  // Test Roblox universe lookup
+  try {
+    const r = await axios.get(`https://apis.roblox.com/universes/v1/${UNIVERSE_ID}`, {
+      headers: { 'x-api-key': CONFIG.ROBLOX_API_KEY },
+      validateStatus: () => true,
+    });
+    results.robloxUniverse = { status: r.status, body: r.data };
+  } catch (e) { results.robloxUniverse = { error: e.message }; }
+
+  // Test Roblox publish (minimal script)
+  const pub = await publishToRoblox('print("debug")');
+  results.robloxPublish = pub;
+
+  // Test DB
+  try {
+    const r = await pool.query('SELECT code FROM game_code WHERE id=1');
+    results.db = { ok: true, codeLength: (r.rows[0]?.code || '').length };
+  } catch (e) { results.db = { ok: false, error: e.message }; }
+
+  res.send(`
+    <html><head><style>
+      body{background:#0e0f14;color:#e2e4f0;font-family:monospace;padding:20px}
+      pre{background:#16181f;border:1px solid #2a2d3a;border-radius:8px;padding:16px;overflow-x:auto;white-space:pre-wrap;word-break:break-all}
+      h2{color:#6c63ff}
+    </style></head><body>
+    <h2>🔍 Roblox AI Dev — Debug</h2>
+    <pre>${JSON.stringify(results, null, 2)}</pre>
+    </body></html>
+  `);
 });
+
+// ── API routes ────────────────────────────────────────────────────────────────
+app.get('/api/token', (req, res) => res.json({ token: CONFIG.APP_SECRET }));
 
 app.get('/api/code', requireAuth, async (req, res) => {
   try {
-    const result = await pool.query('SELECT code FROM game_code WHERE id = 1');
-    res.json({ code: result.rows[0]?.code ?? '' });
-  } catch (err) {
-    console.error('GET /api/code:', err.message);
-    res.status(500).json({ error: 'Failed to fetch code.' });
-  }
+    const r = await pool.query('SELECT code FROM game_code WHERE id=1');
+    res.json({ code: r.rows[0]?.code ?? '' });
+  } catch (e) { res.status(500).json({ error: e.message }); }
 });
 
-// Discuss endpoint — AI chats before generating
+// Chat with AI before generating
 app.post('/api/discuss', requireAuth, async (req, res) => {
-  const { prompt, history } = req.body;
-  if (!prompt && (!history || history.length === 0)) {
-    return res.status(400).json({ error: 'Prompt is required.' });
-  }
+  const { messages } = req.body; // full history from frontend
+  if (!messages || !messages.length) return res.status(400).json({ error: 'No messages.' });
 
   try {
-    const messages = [{ role: 'system', content: DISCUSS_SYSTEM_PROMPT }];
-
-    // Include conversation history if provided
-    if (history && history.length > 0) {
-      messages.push(...history);
-    } else {
-      messages.push({ role: 'user', content: prompt.trim() });
-    }
-
     const completion = await ai.chat.completions.create({
       model: 'nvidia/llama-3.1-nemotron-ultra-253b-v1',
-      messages,
-      max_tokens: 512,
-      temperature: 0.7,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are a friendly expert Roblox game developer and creative director. ' +
+            'Chat with the user about their game idea. Ask clarifying questions if the idea is vague. ' +
+            'Suggest cool improvements or ideas when you have them. ' +
+            'Keep replies short, friendly, and conversational. No code yet — just discuss.',
+        },
+        ...messages,
+      ],
+      max_tokens: 400,
+      temperature: 0.75,
     });
-
-    const reply = completion.choices[0].message.content.trim();
-    res.json({ reply });
-  } catch (err) {
-    console.error('POST /api/discuss:', err?.response?.data ?? err.message);
-    res.status(500).json({ error: 'AI discussion failed. Check server logs.' });
+    res.json({ reply: completion.choices[0].message.content.trim() });
+  } catch (e) {
+    console.error('[discuss]', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
-// Generate + publish
+// Generate Luau + publish to Roblox
 app.post('/api/generate', requireAuth, async (req, res) => {
-  const { prompt, history } = req.body;
-  if (!prompt || !prompt.trim()) {
-    return res.status(400).json({ error: 'Prompt is required.' });
-  }
+  const { prompt, messages } = req.body;
+  if (!prompt?.trim()) return res.status(400).json({ error: 'Prompt is required.' });
 
   try {
-    // 1. Fetch existing code
-    const dbResult = await pool.query('SELECT code FROM game_code WHERE id = 1');
-    const existingCode = dbResult.rows[0]?.code ?? '';
+    // 1. Get existing code
+    const dbRes = await pool.query('SELECT code FROM game_code WHERE id=1');
+    const existing = dbRes.rows[0]?.code ?? '';
 
-    // 2. Build messages — include discussion history if provided so AI has full context
-    const messages = [{ role: 'system', content: CODE_SYSTEM_PROMPT }];
-    if (history && history.length > 0) {
-      // Summarise the discussion as context, then give the final instruction
-      const discussion = history.map(m => `${m.role}: ${m.content}`).join('\n');
-      messages.push({
-        role: 'user',
-        content: `Discussion context:\n${discussion}\n\nExisting Luau code:\n${existingCode || '(empty)'}\n\nFinal prompt: ${prompt.trim()}`,
-      });
-    } else {
-      messages.push({
-        role: 'user',
-        content: `Existing Luau code:\n${existingCode || '(empty)'}\n\nPrompt: ${prompt.trim()}`,
-      });
-    }
-
-    // 3. Generate
+    // 2. Generate Luau
     const completion = await ai.chat.completions.create({
       model: 'nvidia/llama-3.1-nemotron-ultra-253b-v1',
-      messages,
+      messages: [
+        {
+          role: 'system',
+          content:
+            'You are an expert Roblox Luau developer. The user will give you a prompt and existing code. ' +
+            'Modify or add to the code to fulfill the prompt. ' +
+            'Return ONLY raw, valid Luau code. No markdown, no backticks, no explanations.',
+        },
+        // include chat history for context if provided
+        ...(messages || []),
+        {
+          role: 'user',
+          content: `Existing code:\n${existing || '(empty)'}\n\nPrompt: ${prompt.trim()}`,
+        },
+      ],
       max_tokens: 8192,
       temperature: 0.2,
     });
 
     const newCode = completion.choices[0].message.content.trim();
 
-    // 4. Save
-    await pool.query('UPDATE game_code SET code = $1 WHERE id = 1', [newCode]);
+    // 3. Save
+    await pool.query('UPDATE game_code SET code=$1 WHERE id=1', [newCode]);
 
-    // 5. Publish to Roblox
-    const rbxlx = buildRbxlx(newCode);
-    const robloxUrl = `https://apis.roblox.com/universes/v1/${UNIVERSE_ID}/places/${PLACE_ID}/versions?versionType=Published`;
-    console.log('Publishing to Roblox URL:', robloxUrl);
-
-    try {
-      const robloxRes = await axios.post(
-        robloxUrl,
-        Buffer.from(rbxlx, 'utf-8'),
-        {
-          headers: {
-            'x-api-key': CONFIG.ROBLOX_API_KEY,
-            'Content-Type': 'application/octet-stream',
-          },
-          validateStatus: () => true,
-        }
-      );
-      console.log(`Roblox status: ${robloxRes.status}`);
-      console.log('Roblox headers:', JSON.stringify(robloxRes.headers));
-      console.log('Roblox body:', JSON.stringify(robloxRes.data));
-
-      if (robloxRes.status < 200 || robloxRes.status >= 300) {
-        return res.status(502).json({
-          error: `Roblox returned ${robloxRes.status}: ${JSON.stringify(robloxRes.data)}`,
-          code: newCode,
-        });
-      }
-    } catch (robloxErr) {
-      console.error('Roblox publish error:', robloxErr.message);
+    // 4. Publish
+    const pub = await publishToRoblox(newCode);
+    if (!pub.ok) {
       return res.status(502).json({
-        error: `Roblox publish failed: ${robloxErr.message}`,
+        error: `Roblox publish failed (${pub.status}): ${JSON.stringify(pub.body)}`,
         code: newCode,
       });
     }
 
     res.json({ success: true, code: newCode });
-  } catch (err) {
-    console.error('POST /api/generate:', err?.response?.data ?? err.message);
-    res.status(500).json({ error: 'Generation failed. Check server logs.' });
+  } catch (e) {
+    console.error('[generate]', e.message);
+    res.status(500).json({ error: e.message });
   }
 });
 
-// ── Roblox debug endpoint (hit /api/debug-roblox in your browser to diagnose) ─
-app.get('/api/debug-roblox', requireAuth, async (req, res) => {
-  const results = {};
-
-  // 1. Check universe exists
-  try {
-    const r = await axios.get(
-      `https://apis.roblox.com/universes/v1/${UNIVERSE_ID}`,
-      { headers: { 'x-api-key': CONFIG.ROBLOX_API_KEY }, validateStatus: () => true }
-    );
-    results.universe = { status: r.status, body: r.data };
-  } catch (e) { results.universe = { error: e.message }; }
-
-  // 2. Try publishing with application/xml
-  try {
-    const testXml = buildRbxlx('print("debug test")');
-    const r = await axios.post(
-      `https://apis.roblox.com/universes/v1/${UNIVERSE_ID}/places/${PLACE_ID}/versions?versionType=Published`,
-      Buffer.from(testXml, 'utf-8'),
-      {
-        headers: { 'x-api-key': CONFIG.ROBLOX_API_KEY, 'Content-Type': 'application/xml' },
-        validateStatus: () => true,
-      }
-    );
-    results.publishXml = { status: r.status, headers: r.headers, body: r.data };
-  } catch (e) { results.publishXml = { error: e.message }; }
-
-  // 3. Try publishing with application/octet-stream
-  try {
-    const testXml = buildRbxlx('print("debug test")');
-    const r = await axios.post(
-      `https://apis.roblox.com/universes/v1/${UNIVERSE_ID}/places/${PLACE_ID}/versions?versionType=Published`,
-      Buffer.from(testXml, 'utf-8'),
-      {
-        headers: { 'x-api-key': CONFIG.ROBLOX_API_KEY, 'Content-Type': 'application/octet-stream' },
-        validateStatus: () => true,
-      }
-    );
-    results.publishOctet = { status: r.status, headers: r.headers, body: r.data };
-  } catch (e) { results.publishOctet = { error: e.message }; }
-
-  console.log('Debug results:', JSON.stringify(results, null, 2));
-  res.json(results);
-});
-
 // ── Boot ──────────────────────────────────────────────────────────────────────
-initDB().then(() => {
-  app.listen(PORT, () => console.log(`🚀  Listening on port ${PORT}`));
-}).catch((err) => {
-  console.error('DB init failed:', err.message);
-  process.exit(1);
-});
+initDB()
+  .then(() => app.listen(PORT, () => console.log(`🚀 Listening on port ${PORT}`)))
+  .catch(e => { console.error('DB init failed:', e.message); process.exit(1); });
