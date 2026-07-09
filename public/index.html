@@ -1,0 +1,493 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Roblox AI Dev</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    :root {
+      --bg: #0e0f14;
+      --surface: #16181f;
+      --surface2: #1e2029;
+      --border: #2a2d3a;
+      --accent: #6c63ff;
+      --accent-dim: #4e47cc;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #f59e0b;
+      --text: #e2e4f0;
+      --muted: #8b8fa8;
+      --radius: 14px;
+    }
+
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: 'Segoe UI', system-ui, sans-serif;
+      min-height: 100dvh;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      background: var(--surface);
+      border-bottom: 1px solid var(--border);
+      padding: 16px 20px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      position: sticky;
+      top: 0;
+      z-index: 10;
+    }
+    .logo {
+      width: 36px; height: 36px;
+      background: var(--accent);
+      border-radius: 10px;
+      display: grid; place-items: center;
+      font-size: 18px; flex-shrink: 0;
+    }
+    header h1 { font-size: 1.05rem; font-weight: 700; }
+    header p  { font-size: 0.72rem; color: var(--muted); margin-top: 1px; }
+
+    main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      max-width: 700px;
+      width: 100%;
+      margin: 0 auto;
+      padding: 16px;
+      gap: 12px;
+    }
+
+    /* ── Chat area ── */
+    #chatArea {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+      min-height: 60px;
+    }
+
+    .bubble {
+      max-width: 88%;
+      padding: 11px 14px;
+      border-radius: 14px;
+      font-size: 0.9rem;
+      line-height: 1.55;
+      animation: fadeUp .25s ease;
+    }
+    @keyframes fadeUp {
+      from { opacity: 0; transform: translateY(6px); }
+      to   { opacity: 1; transform: translateY(0); }
+    }
+    .bubble.user {
+      align-self: flex-end;
+      background: var(--accent);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+    .bubble.ai {
+      align-self: flex-start;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-bottom-left-radius: 4px;
+    }
+    .bubble.ai .bubble-label {
+      font-size: 0.68rem;
+      font-weight: 700;
+      color: var(--accent);
+      text-transform: uppercase;
+      letter-spacing: .5px;
+      margin-bottom: 5px;
+    }
+    .bubble.system {
+      align-self: center;
+      background: transparent;
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-style: italic;
+      padding: 4px 0;
+    }
+
+    /* typing indicator */
+    .typing {
+      align-self: flex-start;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 14px;
+      border-bottom-left-radius: 4px;
+      padding: 12px 16px;
+      display: flex;
+      gap: 5px;
+      align-items: center;
+    }
+    .typing span {
+      width: 7px; height: 7px;
+      background: var(--muted);
+      border-radius: 50%;
+      animation: bounce .9s infinite;
+    }
+    .typing span:nth-child(2) { animation-delay: .15s; }
+    .typing span:nth-child(3) { animation-delay: .3s; }
+    @keyframes bounce {
+      0%, 60%, 100% { transform: translateY(0); }
+      30%           { transform: translateY(-5px); }
+    }
+
+    /* ── Input row ── */
+    .input-card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    textarea {
+      width: 100%;
+      min-height: 80px;
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      color: var(--text);
+      font-size: 0.92rem;
+      line-height: 1.5;
+      padding: 11px 13px;
+      resize: vertical;
+      outline: none;
+      transition: border-color .2s;
+      font-family: inherit;
+    }
+    textarea:focus { border-color: var(--accent); }
+    textarea::placeholder { color: var(--muted); }
+
+    .btn-row {
+      display: flex;
+      gap: 8px;
+    }
+
+    button.btn {
+      flex: 1;
+      padding: 12px 10px;
+      font-size: 0.88rem;
+      font-weight: 700;
+      border: none;
+      border-radius: 10px;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: background .2s, transform .1s;
+      -webkit-tap-highlight-color: transparent;
+    }
+    button.btn:active { transform: scale(.96); }
+    button.btn:disabled { opacity: .5; cursor: not-allowed; transform: none; }
+
+    #discussBtn {
+      background: var(--surface2);
+      color: var(--text);
+      border: 1px solid var(--border);
+      flex: 0 0 auto;
+      padding: 12px 16px;
+    }
+    #generateBtn {
+      background: var(--accent);
+      color: #fff;
+    }
+    #generateBtn:disabled { background: var(--accent-dim); }
+
+    .spinner {
+      width: 15px; height: 15px;
+      border: 2px solid rgba(255,255,255,.3);
+      border-top-color: #fff;
+      border-radius: 50%;
+      animation: spin .7s linear infinite;
+      display: none;
+    }
+    .spinning .spinner { display: block; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+
+    /* ── Steps ── */
+    #steps { display: none; flex-direction: column; gap: 7px; }
+    #steps.show { display: flex; }
+    .step {
+      display: flex; align-items: center; gap: 9px;
+      font-size: 0.82rem; color: var(--muted); transition: color .3s;
+    }
+    .step.active { color: var(--text); }
+    .step.done   { color: var(--green); }
+    .step-dot {
+      width: 7px; height: 7px; border-radius: 50%;
+      background: var(--border); flex-shrink: 0; transition: background .3s;
+    }
+    .step.active .step-dot { background: var(--accent); box-shadow: 0 0 0 3px rgba(108,99,255,.2); }
+    .step.done   .step-dot { background: var(--green); }
+
+    /* ── Code output ── */
+    #codeCard { display: none; }
+    #codeCard.show {
+      display: block;
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius);
+      padding: 14px;
+    }
+    .code-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 10px;
+    }
+    .code-header span { font-size: 0.75rem; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .5px; }
+    #copyBtn {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      color: var(--text);
+      font-size: 0.75rem;
+      font-weight: 600;
+      padding: 5px 12px;
+      border-radius: 7px;
+      cursor: pointer;
+    }
+    pre {
+      background: var(--surface2);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 12px;
+      overflow-x: auto;
+      font-size: 0.8rem;
+      line-height: 1.6;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 380px;
+      overflow-y: auto;
+    }
+    code { font-family: 'Fira Code', 'Cascadia Code', monospace; color: #c5c8e0; }
+
+    footer {
+      text-align: center;
+      padding: 14px;
+      font-size: 0.7rem;
+      color: var(--muted);
+    }
+  </style>
+</head>
+<body>
+
+<header>
+  <div class="logo">🎮</div>
+  <div>
+    <h1>Roblox AI Dev</h1>
+    <p>NVIDIA Nemotron · Open Cloud · Live publish</p>
+  </div>
+</header>
+
+<main>
+  <!-- Chat bubbles -->
+  <div id="chatArea">
+    <div class="bubble system">Ask the AI anything, or go straight to Generate & Publish.</div>
+  </div>
+
+  <!-- Steps (shown during generate) -->
+  <div id="steps">
+    <div class="step" id="step1"><div class="step-dot"></div> Fetching existing code…</div>
+    <div class="step" id="step2"><div class="step-dot"></div> Generating Luau with Nemotron…</div>
+    <div class="step" id="step3"><div class="step-dot"></div> Saving to database…</div>
+    <div class="step" id="step4"><div class="step-dot"></div> Publishing to Roblox…</div>
+  </div>
+
+  <!-- Code output -->
+  <div id="codeCard">
+    <div class="code-header">
+      <span>Generated Luau Script</span>
+      <button id="copyBtn" onclick="copyCode()">Copy</button>
+    </div>
+    <pre><code id="codeOutput"></code></pre>
+  </div>
+
+  <!-- Input -->
+  <div class="input-card">
+    <textarea id="prompt" placeholder="e.g. Add a spinning part that plays a sound when touched…"></textarea>
+    <div class="btn-row">
+      <button class="btn" id="discussBtn" onclick="discuss()">
+        <span>💬 Ask AI</span>
+      </button>
+      <button class="btn" id="generateBtn" onclick="generate()">
+        <div class="spinner"></div>
+        <span id="genText">Generate &amp; Publish</span>
+      </button>
+    </div>
+  </div>
+</main>
+
+<footer>Experience 10201536579 · Place 109348910187641</footer>
+
+<script>
+  let appToken = '';
+  let currentCode = '';
+  let chatHistory = []; // { role, content }
+
+  async function init() {
+    try {
+      const r = await fetch('/api/token');
+      const d = await r.json();
+      appToken = d.token || '';
+      if (appToken) {
+        const cr = await fetch('/api/code', { headers: { 'x-app-token': appToken } });
+        const cd = await cr.json();
+        if (cd.code) showCode(cd.code, false);
+      }
+    } catch (_) {}
+  }
+
+  // ── Chat helpers ──────────────────────────────────────────────────────────
+  function addBubble(role, text) {
+    const wrap = document.getElementById('chatArea');
+    const el = document.createElement('div');
+    el.className = 'bubble ' + (role === 'user' ? 'user' : 'ai');
+    if (role === 'ai') {
+      el.innerHTML = '<div class="bubble-label">🤖 Nemotron</div>' + escHtml(text);
+    } else {
+      el.textContent = text;
+    }
+    wrap.appendChild(el);
+    el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    return el;
+  }
+
+  function addTyping() {
+    const wrap = document.getElementById('chatArea');
+    const el = document.createElement('div');
+    el.className = 'typing';
+    el.innerHTML = '<span></span><span></span><span></span>';
+    wrap.appendChild(el);
+    el.scrollIntoView({ behavior: 'smooth', block: 'end' });
+    return el;
+  }
+
+  function escHtml(str) {
+    return str.replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/\n/g,'<br>');
+  }
+
+  // ── Discuss ───────────────────────────────────────────────────────────────
+  async function discuss() {
+    const prompt = document.getElementById('prompt').value.trim();
+    if (!prompt) { shake('prompt'); return; }
+
+    addBubble('user', prompt);
+    chatHistory.push({ role: 'user', content: prompt });
+    document.getElementById('prompt').value = '';
+
+    const dBtn = document.getElementById('discussBtn');
+    dBtn.disabled = true;
+    const typing = addTyping();
+
+    try {
+      const res = await fetch('/api/discuss', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-app-token': appToken },
+        body: JSON.stringify({ prompt, history: chatHistory }),
+      });
+      const data = await res.json();
+      typing.remove();
+
+      const reply = data.reply || data.error || 'Something went wrong.';
+      addBubble('ai', reply);
+      chatHistory.push({ role: 'assistant', content: reply });
+    } catch (err) {
+      typing.remove();
+      addBubble('ai', '❌ ' + err.message);
+    } finally {
+      dBtn.disabled = false;
+    }
+  }
+
+  // ── Generate & Publish ────────────────────────────────────────────────────
+  function setStep(n, state) {
+    document.getElementById('step' + n).className = 'step ' + state;
+  }
+
+  async function generate() {
+    const prompt = document.getElementById('prompt').value.trim();
+    if (!prompt) { shake('prompt'); return; }
+
+    // Show user bubble with the final prompt
+    addBubble('user', prompt);
+    document.getElementById('prompt').value = '';
+
+    const gBtn = document.getElementById('generateBtn');
+    gBtn.disabled = true;
+    gBtn.classList.add('spinning');
+    document.getElementById('genText').textContent = 'Working…';
+
+    document.getElementById('steps').classList.add('show');
+    [1,2,3,4].forEach(n => setStep(n, ''));
+    setStep(1, 'active');
+    document.getElementById('codeCard').classList.remove('show');
+
+    try {
+      setStep(1, 'done'); setStep(2, 'active');
+
+      const res = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'x-app-token': appToken },
+        body: JSON.stringify({ prompt, history: chatHistory }),
+      });
+
+      setStep(2, 'done'); setStep(3, 'active');
+      const data = await res.json();
+
+      if (!res.ok) {
+        addBubble('ai', '❌ ' + (data.error || 'Failed.'));
+        if (data.code) showCode(data.code, false); // still show generated code even if publish failed
+        return;
+      }
+
+      setStep(3, 'done'); setStep(4, 'active');
+      await new Promise(r => setTimeout(r, 350));
+      setStep(4, 'done');
+
+      addBubble('ai', '✅ Done! Published to your Roblox experience. The script is live.');
+      chatHistory.push({ role: 'assistant', content: 'Generated and published the Luau script successfully.' });
+      showCode(data.code, true);
+    } catch (err) {
+      addBubble('ai', '❌ ' + (err.message || 'Network error.'));
+    } finally {
+      gBtn.disabled = false;
+      gBtn.classList.remove('spinning');
+      document.getElementById('genText').textContent = 'Generate & Publish';
+    }
+  }
+
+  function showCode(code, scroll) {
+    currentCode = code;
+    document.getElementById('codeOutput').textContent = code;
+    document.getElementById('codeCard').classList.add('show');
+    if (scroll) document.getElementById('codeCard').scrollIntoView({ behavior: 'smooth', block: 'start' });
+  }
+
+  async function copyCode() {
+    await navigator.clipboard.writeText(currentCode);
+    const btn = document.getElementById('copyBtn');
+    btn.textContent = 'Copied!';
+    setTimeout(() => btn.textContent = 'Copy', 1800);
+  }
+
+  function shake(id) {
+    const el = document.getElementById(id);
+    el.style.outline = '2px solid #ef4444';
+    setTimeout(() => el.style.outline = '', 1200);
+  }
+
+  document.addEventListener('keydown', e => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') generate();
+  });
+
+  init();
+</script>
+</body>
+</html>
