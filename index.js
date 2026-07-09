@@ -32,30 +32,86 @@ async function initDB() {
 
 // ── NVIDIA AI ─────────────────────────────────────────────────────────────────
 const ai = new OpenAI({ apiKey: CONFIG.NVIDIA_API_KEY, baseURL: 'https://integrate.api.nvidia.com/v1' });
+const MODEL = 'meta/llama-3.1-70b-instruct';
 
 // ── Roblox publish helper ─────────────────────────────────────────────────────
 function buildRbxlx(luauCode) {
   const safe = luauCode.replace(/\]\]>/g, ']]]]><![CDATA[>');
-  return `<?xml version="1.0" encoding="utf-8"?>
-<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
-  <External>null</External><External>nil</External>
-  <Item class="DataModel" referent="RBX0">
-    <Properties><string name="Name">Place</string></Properties>
-    <Item class="Workspace" referent="RBX1">
-      <Properties><bool name="FilteringEnabled">true</bool><string name="Name">Workspace</string></Properties>
-    </Item>
-    <Item class="ServerScriptService" referent="RBX2">
-      <Properties><string name="Name">ServerScriptService</string></Properties>
-      <Item class="Script" referent="RBX3">
-        <Properties>
-          <string name="Name">AIScript</string>
-          <ProtectedString name="Source"><![CDATA[${safe}]]></ProtectedString>
-          <bool name="Disabled">false</bool>
-        </Properties>
-      </Item>
-    </Item>
-    <Item class="Lighting" referent="RBX4"><Properties><string name="Name">Lighting</string></Properties></Item>
-  </Item>
+  return `<roblox xmlns:xmime="http://www.w3.org/2005/05/xmlmime" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="http://www.roblox.com/roblox.xsd" version="4">
+	<External>null</External>
+	<External>nil</External>
+	<Item class="DataModel" referent="RBX0000000">
+		<Properties>
+			<int name="CreatorId">0</int>
+			<int name="CreatorType">0</int>
+			<int name="GameType">0</int>
+			<bool name="IsGenR15">true</bool>
+			<string name="Name">Place</string>
+		</Properties>
+		<Item class="ServerScriptService" referent="RBX0000001">
+			<Properties>
+				<string name="Name">ServerScriptService</string>
+				<bool name="LoadStringEnabled">false</bool>
+			</Properties>
+			<Item class="Script" referent="RBX0000002">
+				<Properties>
+					<string name="Name">AIScript</string>
+					<ProtectedString name="Source"><![CDATA[${safe}]]></ProtectedString>
+					<bool name="Disabled">false</bool>
+				</Properties>
+			</Item>
+		</Item>
+		<Item class="Workspace" referent="RBX0000003">
+			<Properties>
+				<bool name="FilteringEnabled">true</bool>
+				<string name="Name">Workspace</string>
+				<float name="Gravity">196.2</float>
+			</Properties>
+		</Item>
+		<Item class="Lighting" referent="RBX0000004">
+			<Properties>
+				<string name="Name">Lighting</string>
+				<float name="Brightness">2</float>
+				<Color3 name="Ambient">4278190080</Color3>
+				<float name="FogEnd">100000</float>
+				<float name="FogStart">0</float>
+				<bool name="GlobalShadows">true</bool>
+				<Color3 name="OutdoorAmbient">4286611584</Color3>
+				<float name="ShadowSoftness">0.5</float>
+				<string name="TimeOfDay">14:00:00</string>
+			</Properties>
+		</Item>
+		<Item class="ReplicatedStorage" referent="RBX0000005">
+			<Properties>
+				<string name="Name">ReplicatedStorage</string>
+			</Properties>
+		</Item>
+		<Item class="StarterPack" referent="RBX0000006">
+			<Properties>
+				<string name="Name">StarterPack</string>
+			</Properties>
+		</Item>
+		<Item class="StarterGui" referent="RBX0000007">
+			<Properties>
+				<string name="Name">StarterGui</string>
+				<bool name="ResetPlayerGuiOnSpawn">true</bool>
+			</Properties>
+		</Item>
+		<Item class="Teams" referent="RBX0000008">
+			<Properties>
+				<string name="Name">Teams</string>
+			</Properties>
+		</Item>
+		<Item class="SoundService" referent="RBX0000009">
+			<Properties>
+				<string name="Name">SoundService</string>
+				<float name="DistanceFactor">3.33</float>
+				<float name="DopplerScale">1</float>
+				<bool name="RespectFilteringEnabled">true</bool>
+				<float name="RolloffScale">1</float>
+			</Properties>
+		</Item>
+	</Item>
 </roblox>`;
 }
 
@@ -96,7 +152,7 @@ app.get('/debug', async (req, res) => {
   // Test NVIDIA
   try {
     const c = await ai.chat.completions.create({
-      model: 'nvidia/llama-3.1-nemotron-ultra-253b-v1',
+      model: MODEL,
       messages: [{ role: 'user', content: 'Say "NVIDIA OK" and nothing else.' }],
       max_tokens: 20,
     });
@@ -151,7 +207,7 @@ app.post('/api/discuss', requireAuth, async (req, res) => {
 
   try {
     const completion = await ai.chat.completions.create({
-      model: 'nvidia/llama-3.1-nemotron-ultra-253b-v1',
+      model: MODEL,
       messages: [
         {
           role: 'system',
@@ -185,7 +241,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
 
     // 2. Generate Luau
     const completion = await ai.chat.completions.create({
-      model: 'nvidia/llama-3.1-nemotron-ultra-253b-v1',
+      model: MODEL,
       messages: [
         {
           role: 'system',
