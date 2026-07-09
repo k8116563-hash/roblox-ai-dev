@@ -198,28 +198,28 @@ app.post('/api/generate', requireAuth, async (req, res) => {
 
     // 5. Publish to Roblox
     const rbxlx = buildRbxlx(newCode);
-    let robloxStatus = null;
-    let robloxBody = null;
+    const robloxUrl = `https://apis.roblox.com/universes/v1/${UNIVERSE_ID}/places/${PLACE_ID}/versions?versionType=Published`;
+    console.log('Publishing to Roblox URL:', robloxUrl);
 
     try {
       const robloxRes = await axios.post(
-        `https://apis.roblox.com/universes/v1/${UNIVERSE_ID}/places/${PLACE_ID}/versions?versionType=Published`,
-        rbxlx,
+        robloxUrl,
+        Buffer.from(rbxlx, 'utf-8'),
         {
           headers: {
             'x-api-key': CONFIG.ROBLOX_API_KEY,
             'Content-Type': 'application/octet-stream',
           },
-          validateStatus: () => true, // don't throw on non-2xx, log instead
+          validateStatus: () => true,
         }
       );
-      robloxStatus = robloxRes.status;
-      robloxBody = robloxRes.data;
-      console.log(`Roblox publish response: ${robloxStatus}`, JSON.stringify(robloxBody));
+      console.log(`Roblox status: ${robloxRes.status}`);
+      console.log('Roblox headers:', JSON.stringify(robloxRes.headers));
+      console.log('Roblox body:', JSON.stringify(robloxRes.data));
 
-      if (robloxStatus < 200 || robloxStatus >= 300) {
+      if (robloxRes.status < 200 || robloxRes.status >= 300) {
         return res.status(502).json({
-          error: `Roblox returned ${robloxStatus}: ${JSON.stringify(robloxBody)}`,
+          error: `Roblox returned ${robloxRes.status}: ${JSON.stringify(robloxRes.data)}`,
           code: newCode,
         });
       }
@@ -236,6 +236,51 @@ app.post('/api/generate', requireAuth, async (req, res) => {
     console.error('POST /api/generate:', err?.response?.data ?? err.message);
     res.status(500).json({ error: 'Generation failed. Check server logs.' });
   }
+});
+
+// ── Roblox debug endpoint (hit /api/debug-roblox in your browser to diagnose) ─
+app.get('/api/debug-roblox', requireAuth, async (req, res) => {
+  const results = {};
+
+  // 1. Check universe exists
+  try {
+    const r = await axios.get(
+      `https://apis.roblox.com/universes/v1/${UNIVERSE_ID}`,
+      { headers: { 'x-api-key': CONFIG.ROBLOX_API_KEY }, validateStatus: () => true }
+    );
+    results.universe = { status: r.status, body: r.data };
+  } catch (e) { results.universe = { error: e.message }; }
+
+  // 2. Try publishing with application/xml
+  try {
+    const testXml = buildRbxlx('print("debug test")');
+    const r = await axios.post(
+      `https://apis.roblox.com/universes/v1/${UNIVERSE_ID}/places/${PLACE_ID}/versions?versionType=Published`,
+      Buffer.from(testXml, 'utf-8'),
+      {
+        headers: { 'x-api-key': CONFIG.ROBLOX_API_KEY, 'Content-Type': 'application/xml' },
+        validateStatus: () => true,
+      }
+    );
+    results.publishXml = { status: r.status, headers: r.headers, body: r.data };
+  } catch (e) { results.publishXml = { error: e.message }; }
+
+  // 3. Try publishing with application/octet-stream
+  try {
+    const testXml = buildRbxlx('print("debug test")');
+    const r = await axios.post(
+      `https://apis.roblox.com/universes/v1/${UNIVERSE_ID}/places/${PLACE_ID}/versions?versionType=Published`,
+      Buffer.from(testXml, 'utf-8'),
+      {
+        headers: { 'x-api-key': CONFIG.ROBLOX_API_KEY, 'Content-Type': 'application/octet-stream' },
+        validateStatus: () => true,
+      }
+    );
+    results.publishOctet = { status: r.status, headers: r.headers, body: r.data };
+  } catch (e) { results.publishOctet = { error: e.message }; }
+
+  console.log('Debug results:', JSON.stringify(results, null, 2));
+  res.json(results);
 });
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
