@@ -208,7 +208,7 @@ app.post('/api/generate', requireAuth, async (req, res) => {
         {
           headers: {
             'x-api-key': CONFIG.ROBLOX_API_KEY,
-            'Content-Type': 'application/xml',
+            'Content-Type': 'application/octet-stream',
           },
           validateStatus: () => true, // don't throw on non-2xx, log instead
         }
